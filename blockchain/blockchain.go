@@ -45,6 +45,7 @@ type Blockchain struct {
 	stream *eventStream // Event subscriptions
 
 	// Average gas price (rolling average)
+	priceLimit           *big.Int // Minimal gas price
 	averageGasPrice      *big.Int // The average gas price that gets queried
 	averageGasPriceCount *big.Int // Param used in the avg. gas price calculation
 
@@ -78,6 +79,10 @@ func (b *Blockchain) UpdateGasPriceAvg(newValue *big.Int) {
 
 	b.averageGasPrice.Add(b.averageGasPrice, differential)
 
+	if b.averageGasPrice.Cmp(b.priceLimit) < 0 {
+		b.averageGasPrice.Set(b.priceLimit)
+	}
+
 	b.agpMux.Unlock()
 }
 
@@ -90,16 +95,18 @@ func (b *Blockchain) GetAvgGasPrice() *big.Int {
 func NewBlockchain(
 	logger hclog.Logger,
 	dataDir string,
+	priceLimit uint64,
 	config *chain.Chain,
 	consensus Verifier,
 	executor Executor,
 ) (*Blockchain, error) {
 	b := &Blockchain{
-		logger:    logger.Named("blockchain"),
-		config:    config,
-		consensus: consensus,
-		executor:  executor,
-		stream:    &eventStream{},
+		logger:     logger.Named("blockchain"),
+		priceLimit: big.NewInt(0).SetUint64(priceLimit),
+		config:     config,
+		consensus:  consensus,
+		executor:   executor,
+		stream:     &eventStream{},
 	}
 
 	var (
